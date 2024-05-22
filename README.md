@@ -15,11 +15,11 @@ This project is a modular IoT system designed for signal processing and communic
 
 
 ## Features
-**Generating signal**: Creation of three different signals to randomly pick.
-**Sampling and analyzing**: Fast Fourier Transform (FFT) analysis of a signal.
-**Network**: //NOT yet fully functional.// Wi-Fi connectivity and MQTT protocol for data transmission.
-**Security**: //NOT yet implemented.// Encryption for data storage and retrival.
-**Transmitting**: //NOT yet implemented.// Efficient power usage management.
+**Generating signal**: Creation of three different signals to randomly pick.  
+**Sampling and analyzing**: Fast Fourier Transform (FFT) analysis of a signal.  
+**Network**: //NOT yet fully functional.// Wi-Fi connectivity and MQTT protocol for data transmission.  
+**Security**: //NOT yet implemented.// Encryption for data storage and retrival.  
+**Transmitting**: //NOT yet implemented.// Efficient power usage management.  
 
 
 
