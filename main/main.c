@@ -15,40 +15,29 @@ static const char* TAG = "TaskHandler";
 TaskHandle_t xsignalReadyTask = NULL;
 TaskHandle_t xanalysisCompleteTask = NULL;
 TaskHandle_t xaverageComputeTask = NULL;
-TaskHandle_t xoversampleTask = NULL; 
+TaskHandle_t xoversampleTask = NULL;
+//TaskHandle_t xtransmittingTask = NULL;  
 
 EventGroupHandle_t syncEventGroup;
 const int TASK_1_READY_BIT = BIT0;
 const int TASK_2_READY_BIT = BIT1;
 const int TASK_3_READY_BIT = BIT2;
-const int TASK_4_READY_BIT = BIT3; 
+const int TASK_4_READY_BIT = BIT3;
+//const int TASK_4_READY_BIT = BIT4; 
 
 // void configure_wifi_mqtt() {
-//     char ssid[32], password[64], mqtt_uri[256], mqtt_username[64], mqtt_password[64], mqtt_cert[1024];
+//     char ssid[32], password[64], mqtt_uri[256];
 
 //     printf("Enter WiFi SSID: ");
-//     gets(ssid); // Consider safer alternatives like fgets with specified length
+//     gets(ssid); // safer alternatives fgets with specified length?
 
 //     printf("Enter WiFi Password: ");
-//     gets(password); // Same note on safety
-
+//     gets(password);
 //     store_wifi_credentials(ssid, password);
 
 //     printf("Enter MQTT URI: ");
 //     gets(mqtt_uri);
-
-//     printf("Enter MQTT Username: ");
-//     gets(mqtt_username);
-
-//     printf("Enter MQTT Password: ");
-//     gets(mqtt_password);
-
-//     printf("Paste MQTT Certificate (end with a newline): ");
-//     gets(mqtt_cert);
-
-//     store_mqtt_credentials(mqtt_username, mqtt_password);
 //     store_mqtt_broker_uri(mqtt_uri);
-//     store_mqtt_broker_cert(mqtt_cert);
 // }
 
 void generate_signal_task(void *pvParameters) {
@@ -65,7 +54,6 @@ void generate_signal_task(void *pvParameters) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         ESP_LOGI(TAG, "Task 1 resumes after Task 3 completion.");
-        vTaskDelay(5000 / portTICK_PERIOD_MS);  // Pause before starting next cycle
     }
     vTaskDelete(NULL);
 }
@@ -79,7 +67,7 @@ void sample_and_analyze_task(void *pvParameters) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         ESP_LOGI(TAG, "Task 2 analyzing signal...");
-        sample_and_analyze_signal(); // This will update the global variable optimal_sampling_rate
+        sample_and_analyze_signal(); // update optimal_sampling_rate
         ESP_LOGI(TAG, "Task 2 analysis complete, notifying Task 3.");
 
 
@@ -98,7 +86,7 @@ void compute_average_task(void *pvParameters) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         ESP_LOGI(TAG, "Task 3 computing average...");
-        float average = sample_signal_and_compute_average(5);//change the window length if needed
+        float average = sample_signal_and_compute_average(5); //change the window length if needed
         ESP_LOGI(TAG, "Task 3 average signal value: %.2f", average);
 
         ESP_LOGI(TAG, "Task 3 notifying Task 1 to start next cycle.");
@@ -121,14 +109,9 @@ void oversample_task(void *pvParameters) {
         int crashed_rate = oversample();
         ESP_LOGE(TAG, "Crash detected at %d", crashed_rate);
 
-        // Optionally, this is where you could handle or recover from the crash
-        // For example, you might want to notify other tasks or reset certain parameters
-        // xTaskNotifyGive(<OtherTaskHandle>); // Notify other task if needed
-        ESP_LOGI(TAG, "Task 4 resetting or handling the crash.");
-
         ESP_LOGI(TAG, "Task 4 notifying Task 1 to start next cycle.");
         xTaskNotifyGive(xsignalReadyTask);
-        vTaskDelay(5000 / portTICK_PERIOD_MS);  // Pause before starting next cycle
+        vTaskDelay(5000 / portTICK_PERIOD_MS);  // pause before starting next cycle
     }
 
     vTaskDelete(NULL);
@@ -153,4 +136,5 @@ void app_main() {
     xTaskCreate(sample_and_analyze_task, "SampleAndAnalyzeTask", 4096, NULL, 5, &xanalysisCompleteTask);
     xTaskCreate(compute_average_task, "ComputeAverageTask", 4096, NULL, 5, &xaverageComputeTask);
     xTaskCreate(oversample_task, "OversampleTask", 4096, NULL, 5, &xoversampleTask);
+    //xTaskCreate(transmitting_task, "TransmittingResultsTask", 4096, NULL, 5, &xtransmittingTask);
 }

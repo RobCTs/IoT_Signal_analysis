@@ -91,6 +91,7 @@
 //     nvs_close(nvs_handle);
 // }
 
+// // Should I store certificates in NVS? Read.
 // // Store MQTT broker certificate in NVS
 // void store_mqtt_broker_cert(const char* cert) {
 //     nvs_handle_t nvs_handle;
@@ -227,7 +228,7 @@
 //     retrieve_mqtt_credentials(client_cert, sizeof(client_cert), client_key, sizeof(client_key));
 
 //     const esp_mqtt_client_config_t mqtt_cfg = {
-//          //Ensure that MQTT_BROKER_URI starts with mqtts://
+//          //make sure that MQTT_BROKER_URI starts with mqtts://, otw mqtt over ssl will not work!!!
 //         .broker.address.uri = mqtt_uri,
 //         .broker.address.transport = MQTT_TRANSPORT_OVER_SSL,
 //         .broker.verification.certificate = mqtt_cert, //ca_cert
@@ -242,13 +243,13 @@
 //     client = esp_mqtt_client_init(&mqtt_cfg);
 
 //     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
-//     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client); //in case try NULL
+//     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client); //in case try NULL?
 //     // Start the client
 //     esp_mqtt_client_start(client);
 // }
 
 
-// // First try of a function to publish average data to MQTT
+// // First try of a function to publish average data to MQTT...
 // // Need to check when everything properly set!
 // void publish_average(float average) {
 //     char payload[50];
