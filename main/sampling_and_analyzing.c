@@ -15,19 +15,88 @@ static bool condition_met = false;
 #define THRESHOLD_MULTIPLIER 1.2  // multiplier to adjust the threshold dynamically (before 1.1)
 #define FFT_SIZE 40  // buffer size (should be a power of 2 and depends on your sampling rate)
 #define MAX_ITERATIONS 100  // define a maximum number of iterations for the loop
-// #define WATCHDOG_FEED_INTERVAL 10  // Interval to feed the watchdog in iterations
+#define WATCHDOG_FEED_INTERVAL 10  // interval to feed the watchdog in iterations
 
 int current_sampling_rate = 600;  // starting with an initial "high" rate
 int min_sampling_rate = 40;  // recommended minimum sampling rate
-int max_sampling_rate = 1000;  // max allowable sampling rate
+int max_sampling_rate = 6500;  // max allowable sampling rate (36k?)
 int step_change = 20;  // step change for sampling rate
 float previous_max_magnitude = 0; 
 int initial_sampling_rate;  // to store it
 
 float max_observed_frequency_magnitude = 0;
+ const int larger_step_change = 150; 
+
 
 // Shared variable to store the optimal sampling rate
 int optimal_sampling_rate = 600;
+
+int oversample() {
+    int crashed_rate = 0;
+    float max_observed_magnitude = 0;
+
+    int iterations_counter = 0;  // counter to track iterations for watchdog reset
+
+
+    while (true) {  // Infinite loop, no predefined crash condition
+        ESP_LOGI(TAG, "Current Sampling Rate: %d Hz", current_sampling_rate);
+
+        // Sample and analyze the signal at the current rate
+        float dt = 1.0 / current_sampling_rate;  // Time interval based on the current sampling rate
+        float signal[FFT_SIZE];  // Buffer to store the signal samples
+        float frequency_magnitude1[FFT_SIZE / 2 + 1];  // Buffer to store frequency magnitudes from FFT
+
+        // Simulate sampling the signal (replace get_signal_at(t) with the actual function to retrieve signal data)
+        for (int i = 0; i < FFT_SIZE; i++) {
+            float t = i * dt;
+            signal[i] = get_signal_at(t); }
+
+        // Perform FFT analysis on the sampled signal
+        analyze_fft(signal, frequency_magnitude1);
+
+        // Find the maximum magnitude in the frequency spectrum.
+        float max_frequency_magnitude_current_rate = 0;
+        for (int i = 0; i < FFT_SIZE / 2 + 1; i++) {
+            if (frequency_magnitude1[i] > max_frequency_magnitude_current_rate) {
+                max_frequency_magnitude_current_rate = frequency_magnitude1[i];
+            }
+        }
+
+        // Update the maximum observed frequency magnitude and optimal sampling rate
+        if (max_frequency_magnitude_current_rate > max_observed_magnitude) {
+            max_observed_magnitude = max_frequency_magnitude_current_rate;
+        }
+
+        // Log the maximum frequency magnitude for diagnostics
+        ESP_LOGI(TAG, "Current Sampling Rate: %d Hz, Current Max Frequency Magnitude: %.2f, Max Observed Frequency Magnitude: %.2f",
+         current_sampling_rate, max_frequency_magnitude_current_rate, max_observed_magnitude);
+
+
+        // Increase the sampling rate and handle any possible integer overflow
+        if (current_sampling_rate + larger_step_change > current_sampling_rate) {
+            current_sampling_rate += larger_step_change;
+            crashed_rate = current_sampling_rate;
+        } else {
+            // If overflow occurs, log and reset sampling rate
+            ESP_LOGE(TAG, "Integer overflow detected at sampling rate %d Hz. Resetting to safe value.", current_sampling_rate);
+            current_sampling_rate = 600;
+        }
+
+        // Periodically reset the watchdog timer
+        iterations_counter++;
+        if (iterations_counter >= WATCHDOG_FEED_INTERVAL) {
+            esp_task_wdt_reset();
+            iterations_counter = 0;  // resetr
+        }
+   }
+
+    // After exiting the loop, optionally reset sampling rate to a safe value or handle the failure
+    ESP_LOGI(TAG, "Handling after system failure or stop condition.");
+    current_sampling_rate = 600;  // Reset to a safe value
+
+    return crashed_rate;
+}
+
 
 // Analyze the FFT of the provided signal and store magnitude results.
 void analyze_fft(const float* signal, float* frequency_magnitude) {
@@ -71,7 +140,6 @@ int sample_and_analyze_signal() {
 
     int increase_retries = 0; 
     const int max_increase_retries = 3; 
-    const int larger_step_change = 150; 
 
     int no_improvement_counter = 0;
     float improvement_ratio = 1.05; // ratio to determine significant improvement (e.g., 5% improvement)

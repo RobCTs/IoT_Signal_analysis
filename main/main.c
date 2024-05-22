@@ -15,11 +15,13 @@ static const char* TAG = "TaskHandler";
 TaskHandle_t xsignalReadyTask = NULL;
 TaskHandle_t xanalysisCompleteTask = NULL;
 TaskHandle_t xaverageComputeTask = NULL;
+TaskHandle_t xoversampleTask = NULL; 
 
 EventGroupHandle_t syncEventGroup;
 const int TASK_1_READY_BIT = BIT0;
 const int TASK_2_READY_BIT = BIT1;
 const int TASK_3_READY_BIT = BIT2;
+const int TASK_4_READY_BIT = BIT3; 
 
 // void configure_wifi_mqtt() {
 //     char ssid[32], password[64], mqtt_uri[256], mqtt_username[64], mqtt_password[64], mqtt_cert[1024];
@@ -51,7 +53,7 @@ const int TASK_3_READY_BIT = BIT2;
 
 void generate_signal_task(void *pvParameters) {
     ESP_LOGI(TAG, "Task 1 initialized.");
-    xEventGroupSync(syncEventGroup, TASK_1_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT, portMAX_DELAY);
+    xEventGroupSync(syncEventGroup, TASK_1_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
 
     while (true) {
         ESP_LOGI(TAG, "Task 1 generating signal...");
@@ -70,7 +72,7 @@ void generate_signal_task(void *pvParameters) {
 
 void sample_and_analyze_task(void *pvParameters) {
     ESP_LOGI(TAG, "Task 2 initialized.");
-    xEventGroupSync(syncEventGroup, TASK_2_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT, portMAX_DELAY);
+    xEventGroupSync(syncEventGroup, TASK_2_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
 
     while (true) {
         ESP_LOGI(TAG, "Task 2 waiting for signal from Task 1...");
@@ -82,14 +84,14 @@ void sample_and_analyze_task(void *pvParameters) {
 
 
         xTaskNotifyGive(xaverageComputeTask);
-        vTaskDelay(5000 / portTICK_PERIOD_MS);  // Pause before starting next cycle
+        
     }
     vTaskDelete(NULL);
 }
 
 void compute_average_task(void *pvParameters) {
     ESP_LOGI(TAG, "Task 3 initialized.");
-    xEventGroupSync(syncEventGroup, TASK_3_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT, portMAX_DELAY);
+    xEventGroupSync(syncEventGroup, TASK_3_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
 
     while (true) {
         ESP_LOGI(TAG, "Task 3 waiting for signal from Task 2...");
@@ -100,10 +102,38 @@ void compute_average_task(void *pvParameters) {
         ESP_LOGI(TAG, "Task 3 average signal value: %.2f", average);
 
         ESP_LOGI(TAG, "Task 3 notifying Task 1 to start next cycle.");
-        xTaskNotifyGive(xsignalReadyTask);
+        xTaskNotifyGive(xoversampleTask);
     }
     vTaskDelete(NULL);
 }
+
+void oversample_task(void *pvParameters) {
+    ESP_LOGI(TAG, "Task 4 initialized.");
+    xEventGroupSync(syncEventGroup, TASK_4_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
+
+    while (true) {
+
+        ESP_LOGI(TAG, "Task 4 waiting for signal from Task 3...");
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+
+        ESP_LOGI(TAG, "Task 4 starting oversampling...");
+        int crashed_rate = oversample();
+        ESP_LOGE(TAG, "Crash detected at %d", crashed_rate);
+
+        // Optionally, this is where you could handle or recover from the crash
+        // For example, you might want to notify other tasks or reset certain parameters
+        // xTaskNotifyGive(<OtherTaskHandle>); // Notify other task if needed
+        ESP_LOGI(TAG, "Task 4 resetting or handling the crash.");
+
+        ESP_LOGI(TAG, "Task 4 notifying Task 1 to start next cycle.");
+        xTaskNotifyGive(xsignalReadyTask);
+        vTaskDelay(5000 / portTICK_PERIOD_MS);  // Pause before starting next cycle
+    }
+
+    vTaskDelete(NULL);
+}
+
 
 void app_main() {
     srand(time(NULL)); // seed the random number generator
@@ -122,4 +152,5 @@ void app_main() {
     xTaskCreate(generate_signal_task, "GenerateSignalTask", 4096, NULL, 5, &xsignalReadyTask);
     xTaskCreate(sample_and_analyze_task, "SampleAndAnalyzeTask", 4096, NULL, 5, &xanalysisCompleteTask);
     xTaskCreate(compute_average_task, "ComputeAverageTask", 4096, NULL, 5, &xaverageComputeTask);
-    }
+    xTaskCreate(oversample_task, "OversampleTask", 4096, NULL, 5, &xoversampleTask);
+}

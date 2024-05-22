@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+int oversample();
 int sample_and_analyze_signal();
 void analyze_fft(const float* signal, float* frequency_magnitude);
 float calculate_average_signal(float start_time, float window_length, int otpimal_rate);
