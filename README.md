@@ -134,12 +134,11 @@ This project utilizes an ESP32 microcontroller to generate, sample, analyze, and
 
 ### Maximum and Optimal Sampling Frequency
 #### MSF
-**Capability**: By manual, the ESP32 is capable of sampling at a frequency up to 2 MHz. This allows for precise data capture, essential for accurately representing high-frequency components in the signal analysis.
-***Utilization**: While the device can sample up to 2 MHz, the actual sampling rate used is dynamically adjusted based on the signal content to optimize processing power and storage.The maximum sampling frequency of the ESP32 used in this project is 36 kHz. This high sampling rate demonstrates the capability of the system to handle fast signal acquisition.
+Depending if we are working in real-time conditions or not. Without a delay, so essentially using the speed of the processor, and chosing a buffer size of 128, we can go up to 10MHz (and it stopped because of time management). With higher buffers there is an overflow error. Note that the actual sampling rate used is dynamically adjusted based on the signal content to optimize processing power and storage.The maximum sampling frequency on the ESP32 while introducing a delay appears to be at least 6 MHz (again might be more, stopped due to time costraints). This high sampling rate demonstrates the capability of the system to handle fast signal acquisition.
 
 #### OSF
-**Determination**: The optimal sampling rate is dynamically calculated based on the Fast Fourier Transform (FFT) analysis of the signal. The system adjusts the sampling rate to ensure it meets the Nyquist criterion, which states that the sampling frequency must be at least twice the highest frequency present in the signal to avoid aliasing.
-**Adjustment Process**: The sampling rate starts at a higher rate and is adjusted downwards or upwards based on the FFT results and a predefined threshold to find the optimal rate that captures all relevant frequencies without unnecessary oversampling.
+The optimal sampling rate is dynamically calculated based on the Fast Fourier Transform (FFT) analysis of the signal. The system adjusts the sampling rate to ensure it meets the Nyquist criterion, which states that the sampling frequency must be at least twice the highest frequency present in the signal to avoid aliasing.
+The sampling rate starts at a higher rate and is adjusted downwards or upwards based on the FFT results and a predefined threshold to find the optimal rate that captures all relevant frequencies without unnecessary oversampling.
 
 ### Signal Processing
 The system employs kissFFT, a lightweight **FFT** library, to transform time-domain signals into their frequency components. This transformation helps in identifying the dominant frequencies within the signal which guides the sampling rate adjustment.

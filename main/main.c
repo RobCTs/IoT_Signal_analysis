@@ -69,6 +69,7 @@ void sample_and_analyze_task(void *pvParameters) {
         ESP_LOGI(TAG, "Task 2 analyzing signal...");
         sample_and_analyze_signal(); // update optimal_sampling_rate
         ESP_LOGI(TAG, "Task 2 analysis complete, notifying Task 3.");
+        //uxTaskGetStackHighWaterMark to check stack usage?
 
 
         xTaskNotifyGive(xaverageComputeTask);
