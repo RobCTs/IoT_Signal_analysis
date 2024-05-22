@@ -9,17 +9,20 @@
 #include <stdbool.h>
 #include "esp_task_wdt.h"
 
+
 static const char* TAG = "DynamicSampler";
 static bool condition_met = false; 
 
-#define THRESHOLD_MULTIPLIER 1.2  // multiplier to adjust the threshold dynamically (before 1.1)
-#define FFT_SIZE 40  // buffer size (should be a power of 2 and depends on your sampling rate)
+#define THRESHOLD_MULTIPLIER 1.2  // multiplier to adjust the threshold dynamically
+#define FFT_SIZE 64  // buffer size (should be a power of 2 and depends on your sampling rate 32, 64, 128, 256, 512, 1024, etc.
+// Increasing improves frequency resolution but requires more computational power and memory.
 #define MAX_ITERATIONS 100  // define a maximum number of iterations for the loop
 #define WATCHDOG_FEED_INTERVAL 10  // interval to feed the watchdog in iterations
+#define PAUSE_DURATION_MS 1000  // in milliseconds
 
 int current_sampling_rate = 600;  // starting with an initial "high" rate
 int min_sampling_rate = 40;  // recommended minimum sampling rate
-int max_sampling_rate = 6500;  // max allowable sampling rate (36k?)
+int max_sampling_rate = 30000;  // max allowable sampling rate (36k so far)
 int step_change = 20;  // step change for sampling rate
 float previous_max_magnitude = 0; 
 int initial_sampling_rate;  // to store it
@@ -39,12 +42,12 @@ int oversample() {
 
 
     while (true) {  // Infinite loop, no predefined crash condition
-        ESP_LOGI(TAG, "Current Sampling Rate: %d Hz", current_sampling_rate);
+        // ESP_LOGI(TAG, "Current Sampling Rate: %d Hz", current_sampling_rate);
 
         // Sample and analyze the signal at the current rate
-        float dt = 1.0 / current_sampling_rate;  // Time interval based on the current sampling rate
-        float signal[FFT_SIZE];  // Buffer to store the signal samples
-        float frequency_magnitude1[FFT_SIZE / 2 + 1];  // Buffer to store frequency magnitudes from FFT
+        float dt = 1.0 / current_sampling_rate;  // interval based on the current sampling rate
+        float signal[FFT_SIZE];  // buffer to store the signal samples
+        float frequency_magnitude1[FFT_SIZE / 2 + 1];  // buffer to store frequency magnitudes from FFT
 
         // Simulate sampling the signal (replace get_signal_at(t) with the actual function to retrieve signal data)
         for (int i = 0; i < FFT_SIZE; i++) {
@@ -68,9 +71,14 @@ int oversample() {
         }
 
         // Log the maximum frequency magnitude for diagnostics
-        ESP_LOGI(TAG, "Current Sampling Rate: %d Hz, Current Max Frequency Magnitude: %.2f, Max Observed Frequency Magnitude: %.2f",
-         current_sampling_rate, max_frequency_magnitude_current_rate, max_observed_magnitude);
+        // ESP_LOGI(TAG, "Current Sampling Rate: %d Hz, Current Max Frequency Magnitude: %.2f, Max Observed Frequency Magnitude: %.2f",
+        //  current_sampling_rate, max_frequency_magnitude_current_rate, max_observed_magnitude);
 
+        // Break the loop if the sampling rate reaches or exceeds 30,000 Hz
+        if (current_sampling_rate >= max_sampling_rate) {
+            ESP_LOGI(TAG, "Reached maximum sampling rate of %d Hz. Exiting loop.", max_sampling_rate);
+            break;
+        }
 
         // Increase the sampling rate and handle any possible integer overflow
         if (current_sampling_rate + larger_step_change > current_sampling_rate) {
@@ -91,9 +99,8 @@ int oversample() {
    }
 
     // After exiting the loop, optionally reset sampling rate to a safe value or handle the failure
-    ESP_LOGI(TAG, "Handling after system failure or stop condition.");
-    current_sampling_rate = 600;  // Reset to a safe value
-
+    current_sampling_rate = 600;  // erset 
+    max_observed_frequency_magnitude = 0;  // reset
     return crashed_rate;
 }
 
@@ -259,7 +266,7 @@ int sample_and_analyze_signal() {
 
     // Log optimization reached after exiting the loop
     ESP_LOGI(TAG, "Optimization reached with max magnitude: %.2f", max_observed_frequency_magnitude);
-
+     
     // Output the final results
     ESP_LOGI(TAG, "The optimal sampling rate is: %d Hz", optimal_sampling_rate);
     ESP_LOGI(TAG, "The maximum sampling frequency observed was: %d Hz",  max_sampling_rate_observed);

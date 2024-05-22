@@ -135,7 +135,7 @@ This project utilizes an ESP32 microcontroller to generate, sample, analyze, and
 ### Maximum and Optimal Sampling Frequency
 #### MSF
 **Capability**: By manual, the ESP32 is capable of sampling at a frequency up to 2 MHz. This allows for precise data capture, essential for accurately representing high-frequency components in the signal analysis.
-***Utilization**: While the device can sample up to 2 MHz, the actual sampling rate used is dynamically adjusted based on the signal content to optimize processing power and storage.The maximum sampling frequency of the ESP32 used in this project is XX kHz. This high sampling rate demonstrates the capability of the system to handle fast signal acquisition.
+***Utilization**: While the device can sample up to 2 MHz, the actual sampling rate used is dynamically adjusted based on the signal content to optimize processing power and storage.The maximum sampling frequency of the ESP32 used in this project is 36 kHz. This high sampling rate demonstrates the capability of the system to handle fast signal acquisition.
 
 #### OSF
 **Determination**: The optimal sampling rate is dynamically calculated based on the Fast Fourier Transform (FFT) analysis of the signal. The system adjusts the sampling rate to ensure it meets the Nyquist criterion, which states that the sampling frequency must be at least twice the highest frequency present in the signal to avoid aliasing.
