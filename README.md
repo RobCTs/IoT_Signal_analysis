@@ -9,7 +9,8 @@ This project is a modular IoT system designed for signal processing and communic
 ## Student
 
 | **Matricola** | **GitHub** |
-| `2162601` | [![name](https://github.com/b-rbmp/NexxGate/blob/main/docs/logos/github.png)](https://github.com/RobCTs) |
+|---------------|------------|
+| `2162601`     | [![name](https://github.com/b-rbmp/NexxGate/blob/main/docs/logos/github.png)](https://github.com/RobCTs) |
 
 
 
