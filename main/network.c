@@ -24,15 +24,15 @@ static int total_bytes_sent = 0;
 
 const char ssid[] = "your_ssid";
 const char password[] = "your_password";
-const char mqtt_uri[] = "your_uri"; //mqtts fot tls
+const char mqtt_uri[] = "mqtts://your_ip:8883"; //!
 const char mqtt_cert[] = "-----BEGIN CERTIFICATE-----\n"
-"your_certificate\n"
+"your_ca_cert\n"
 "-----END CERTIFICATE-----";
 const char client_cert[] = "-----BEGIN CERTIFICATE-----\n"
-"your_cert\n"
+"your_client_cert\n"
 "-----END CERTIFICATE-----";
 const char client_key[] = "-----BEGIN PRIVATE KEY-----\n"
-"your_key\n"
+"your_client_key\n"
 "-----END PRIVATE KEY-----";
 
 //Initialize NVS

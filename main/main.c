@@ -21,14 +21,14 @@
 
 static const char* TAG = "TaskHandler";
 
-// #define I2C_PORT 0
-// #define CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM 100
-// #define CONFIG_EXAMPLE_I2C_ADDR 0x40
-// #define CONFIG_EXAMPLE_I2C_MASTER_SCL 2
-// #define CONFIG_EXAMPLE_I2C_MASTER_SDA 1
-// #define I2C_ADDR CONFIG_EXAMPLE_I2C_ADDR
-// ina219_t dev;
-// float power;
+#define I2C_PORT 0
+#define CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM 100
+#define CONFIG_EXAMPLE_I2C_ADDR 0x40
+#define CONFIG_EXAMPLE_I2C_MASTER_SCL 2
+#define CONFIG_EXAMPLE_I2C_MASTER_SDA 1
+#define I2C_ADDR CONFIG_EXAMPLE_I2C_ADDR
+ina219_t dev;
+float power;
 
 extern QueueHandle_t signalQueue;
 char message[256];  // buffer for MQTT messages
@@ -38,7 +38,6 @@ TaskHandle_t xanalysisCompleteTask = NULL;
 TaskHandle_t xaverageComputeTask = NULL;
 TaskHandle_t xoversampleTask = NULL;
 TaskHandle_t xmonitorSystemHealthTask = NULL;
-//TaskHandle_t xTransmittingTask = NULL;
 TaskHandle_t xNetworkConfigTask = NULL;
 TaskHandle_t xPowerMeasurementTask = NULL;  
 
@@ -48,15 +47,12 @@ const int TASK_2_READY_BIT = BIT1;
 const int TASK_3_READY_BIT = BIT2;
 const int TASK_4_READY_BIT = BIT3;
 const int TASK_5_READY_BIT = BIT4;
-//const int TASK_6_READY_BIT = BIT5;
-const int TASK_7_READY_BIT = BIT6;
-const int TASK_8_READY_BIT = BIT7; 
 
 
 
 void generate_signal_task(void *pvParameters) {
     ESP_LOGI(TAG, "Task 1 initialized.");
-    xEventGroupSync(syncEventGroup, TASK_1_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT | TASK_5_READY_BIT, portMAX_DELAY);
+    xEventGroupSync(syncEventGroup, TASK_1_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
     esp_task_wdt_add(NULL);  // add this task to the watchdog timer
     int64_t start_time, end_time;
 
@@ -85,7 +81,7 @@ void sample_and_analyze_task(void *pvParameters) {
     int64_t start_time, end_time;
     UBaseType_t uxHighWaterMark;
     
-    xEventGroupSync(syncEventGroup, TASK_2_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT | TASK_5_READY_BIT, portMAX_DELAY);
+    xEventGroupSync(syncEventGroup, TASK_2_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
     esp_task_wdt_add(NULL); 
 
     while (true) {
@@ -120,7 +116,7 @@ void compute_average_task(void *pvParameters) {
     ESP_LOGI(TAG, "Task 3 initialized.");
     int64_t start_time, end_time;
 
-    xEventGroupSync(syncEventGroup, TASK_3_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT | TASK_5_READY_BIT, portMAX_DELAY);
+    xEventGroupSync(syncEventGroup, TASK_3_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
     esp_task_wdt_add(NULL); 
 
     while (true) {
@@ -146,7 +142,7 @@ void oversample_task(void *pvParameters) {
     ESP_LOGI(TAG, "Task 4 initialized.");
     int64_t start_time, end_time;
 
-    xEventGroupSync(syncEventGroup, TASK_4_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT | TASK_5_READY_BIT, portMAX_DELAY);
+    xEventGroupSync(syncEventGroup, TASK_4_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
     esp_task_wdt_add(NULL);  // add this task to the watchdog timer
     UBaseType_t uxHighWaterMark;
 
@@ -177,10 +173,7 @@ void oversample_task(void *pvParameters) {
 
 void monitor_system_health() {
     ESP_LOGI(TAG, "Task 6 initialized.");
-    xEventGroupSync(syncEventGroup, TASK_5_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT | TASK_5_READY_BIT, portMAX_DELAY);
     
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
     unsigned int free_heap = esp_get_free_heap_size();
     unsigned int minimum_ever_free_heap = esp_get_minimum_free_heap_size();
     ESP_LOGI(TAG, "Free Heap: %u bytes", free_heap);
@@ -191,52 +184,61 @@ void monitor_system_health() {
     mqtt_publish("/monitoring", message);
     xTaskNotifyGive(xsignalReadyTask);
 
-    vTaskDelay(pdMS_TO_TICKS(10000));  // Log every 10 seconds
-    vTaskDelay(5000 / portTICK_PERIOD_MS);  // pause before starting next cycle
+    vTaskDelay(pdMS_TO_TICKS(3000));  // 3s
 }
 
 
-// // Function to initialize INA219 sensor
-// void initialize_ina219_library(void) {
-//     ESP_ERROR_CHECK(i2cdev_init());
-//     memset(&dev, 0, sizeof(ina219_t));
-//     assert(CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM > 0);
-//     ESP_ERROR_CHECK(ina219_init_desc(&dev, I2C_ADDR, I2C_MASTER_NUM, I2C_MASTER_SDA_IO, I2C_MASTER_SCL_IO));
-//     ESP_LOGI(TAG, "Initializing ina219");
-//     ESP_ERROR_CHECK(ina219_init(&dev));
-//     ESP_LOGI(TAG, "Configuring ina219");
-//     ESP_ERROR_CHECK(ina219_configure(&dev, INA219_BUS_RANGE_16V, INA219_GAIN_0_125,
-//                                      INA219_RES_12BIT_1S, INA219_RES_12BIT_1S, INA219_MODE_CONT_SHUNT_BUS));
-//     ESP_LOGI(TAG, "Calibrating ina219");
-//     ESP_ERROR_CHECK(ina219_calibrate(&dev, (float)CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM / 1000.0f));
-// }
+// Function to initialize INA219 sensor
+void initialize_power_sensor(void) {
+    ESP_ERROR_CHECK(i2cdev_init());
+    memset(&dev, 0, sizeof(ina219_t));
+    assert(CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM > 0);
+    ESP_ERROR_CHECK(ina219_init_desc(&dev, I2C_ADDR, I2C_MASTER_NUM, I2C_MASTER_SDA_IO, I2C_MASTER_SCL_IO));
+    ESP_LOGI(TAG, "Initializing ina219");
+    ESP_ERROR_CHECK(ina219_init(&dev));
+    ESP_LOGI(TAG, "Configuring ina219");
+    ESP_ERROR_CHECK(ina219_configure(&dev, INA219_BUS_RANGE_16V, INA219_GAIN_0_125,
+                                     INA219_RES_12BIT_1S, INA219_RES_12BIT_1S, INA219_MODE_CONT_SHUNT_BUS));
+    ESP_LOGI(TAG, "Calibrating ina219");
+    ESP_ERROR_CHECK(ina219_calibrate(&dev, (float)CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM / 1000.0f));
+}
 
-// // Power measurement task to read and log power values
-// void power_measurement_task(void *pvParameters) {
-//     float power;
-//     ESP_LOGI(TAG, "Power measurement task started");
-//     while (true) {
-//         esp_err_t ret = ina219_get_power(&dev, &power);
-//         if (ret == ESP_OK) {
-//             ESP_LOGI(TAG, "Power: %.2f mW", power);
-//         } else {
-//             ESP_LOGE(TAG, "Failed to get power reading: %s", esp_err_to_name(ret));
-//         }
-//         vTaskDelay(pdMS_TO_TICKS(1000));  // Measure every second
-//     }
-// }
-
+void power_measurement_task(void *pvParameters) {
+    float power;
+    ESP_LOGI(TAG, "Power measurement task started");
+    while (true) {
+        esp_err_t ret = ina219_get_power(&dev, &power);
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "Power: %.2f mW", power);
+            snprintf(message, sizeof(message), "Power: %.2f mW", power);
+            mqtt_publish("/power_measurement", message);
+        } else {
+            ESP_LOGE(TAG, "Failed to get power reading: %s", esp_err_to_name(ret));
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
 
 
 void network_config_task(void *pvParameters) {
     ESP_LOGI(TAG, "Network Config initialized.");    
     network_init();  // Initialize network
+    // // Wait for connection
+    // EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+    //         WIFI_CONNECTED_BIT,
+    //         pdFALSE,
+    //         pdTRUE,
+    //         portMAX_DELAY);
+
+    // if (bits & WIFI_CONNECTED_BIT) {
+    //     ESP_LOGI(TAG, "Connected to AP");
+    // } else {
+    //     ESP_LOGI(TAG, "Failed to connect to AP");
+    // }
+
     ESP_LOGI(TAG, "Network Configuration completed.");
     mqtt_app_start();  // Start MQTT
     ESP_LOGI(TAG, "Credentials correctly configured");
-
-    // // Signal that this task has completed its configuration.
-    // xEventGroupSetBits(syncEventGroup2, TASK_6_READY_BIT);
 
     // Suspend this task indefinitely
     vTaskSuspend(NULL);
@@ -254,6 +256,9 @@ void app_main() {
     
     syncEventGroup = xEventGroupCreate();
 
+    // Initialize INA219 sensor
+    initialize_power_sensor();
+
     xTaskCreate(network_config_task, "NetworkConfigTask", 4096, NULL, 9, &xNetworkConfigTask); //NULL?
 
     vTaskDelay(pdMS_TO_TICKS(15000));  
@@ -262,10 +267,6 @@ void app_main() {
     xTaskCreate(compute_average_task, "ComputeAverageTask", 4096, NULL, 5, &xaverageComputeTask);
     xTaskCreate(oversample_task, "OversampleTask", 8192, NULL, 4, &xoversampleTask);
 
-    // Keep the main function running
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(2000)); // Sleep for 1000ms (1 second)
-        xTaskCreate(monitor_system_health, "MonitorHealthTask", 4096, NULL, 5, &xmonitorSystemHealthTask);
-        //xTaskCreate(power_measurement_task, "PowerMeasurementTask", 4096, NULL, 6, &xPowerMeasurementTask);
-    }  
+    xTaskCreate(monitor_system_health, "MonitorHealthTask", 4096, NULL, 5, &xmonitorSystemHealthTask);
+    xTaskCreate(power_measurement_task, "PowerMeasurementTask", 4096, NULL, 6, &xPowerMeasurementTask);
 }

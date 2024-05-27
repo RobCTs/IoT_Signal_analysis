@@ -39,6 +39,7 @@ int optimal_sampling_rate = 600;
 
 int oversample() {
     int crashed_rate = 0;
+    int oversampling_rate = 0;
     const int oversample_jump = 500000;
     float max_observed_magnitude = 0;
     int iterations_counter = 0;  // counter to track iterations for watchdog reset
@@ -93,9 +94,9 @@ int oversample() {
         //  current_sampling_rate, max_frequency_magnitude_current_rate, max_observed_magnitude);
         free(signal);
         free(frequency_magnitude1);
-        
+        current_sampling_rate = oversampling_rate;
         // Break the loop if the sampling rate reaches or exceeds 30,000 Hz
-        if (current_sampling_rate >= max_sampling_rate) {
+        if (oversampling_rate >= max_sampling_rate) {
             ESP_LOGI(TAG, "Reached maximum sampling rate of %d Hz. Exiting loop.", max_sampling_rate);
             char status_message[256];
             snprintf(status_message, sizeof(status_message), "Reached maximum sampling rate of %d Hz, exiting loop.", max_sampling_rate);
@@ -109,12 +110,13 @@ int oversample() {
         }
 
         // Increase the sampling rate and handle any possible integer overflow
-        if (current_sampling_rate + oversample_jump > current_sampling_rate) {
-            current_sampling_rate += oversample_jump;
-            crashed_rate = current_sampling_rate;
+        if (oversampling_rate + oversample_jump > oversampling_rate) {
+            oversampling_rate += oversample_jump;
+            crashed_rate = oversampling_rate;
         } else {
             // If overflow occurs, log and reset sampling rate
             ESP_LOGE(TAG, "Integer overflow detected at sampling rate %d Hz. Resetting to safe value.", current_sampling_rate);
+            oversampling_rate = 600;
             current_sampling_rate = 600;
         }
 
@@ -240,7 +242,7 @@ int sample_and_analyze_signal() {
         }
 
             if (increasing) {
-                if (max_frequency_magnitude > previous_max_magnitude && current_sampling_rate < max_sampling_rate) {
+                if (max_frequency_magnitude > previous_max_magnitude && current_sampling_rate < max_sampling_rate_observed) {
                     current_sampling_rate += step_change; // use normal step
                     ESP_LOGI(TAG, "Increasing sampling rate to: %d Hz", current_sampling_rate);
                     increase_retries = 0; // reset retries on successful increase
@@ -302,7 +304,7 @@ int sample_and_analyze_signal() {
     // Reset the condition flag and relevant variables for the next analysis cycle
     condition_met = false;
     current_sampling_rate = 600; 
-    max_sampling_rate_observed = 600;
+    max_sampling_rate_observed = 0;
     max_observed_frequency_magnitude = 0;
     previous_max_magnitude = 0;
     esp_task_wdt_reset();

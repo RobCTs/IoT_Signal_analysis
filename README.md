@@ -3,7 +3,7 @@ IoT individual assignment to process signals
 
 
 ## Overview
-This project is a modular IoT system designed for signal processing and communication using an ESP32 microcontroller. The system includes functionalities for signal processing using FFT and network communication using MQTT over Wi-Fi. It also includes the securtity and power management modules which are yet to be completed.
+This project is a modular IoT system designed for signal processing and communication using an ESP32 microcontroller. The system includes functionalities for signal processing using FFT and network communication using MQTT over Wi-Fi and a power consumption sensor analysis.
 
 
 ## Student
@@ -19,7 +19,7 @@ This project is a modular IoT system designed for signal processing and communic
 **Sampling and analyzing**: Sampling and Fast Fourier Transform (FFT) analysis of the signal.  
 **Network**: Wi-Fi connectivity and MQTT client initialization for data transmission.    
 **Transmitting**: Data transmisssion to a MQTT borker through safe protocols.  
-**Monitoritng**: //NOT yet fully functional.// Efficient power/memory/latency management.  
+**Monitoritng**: Power/memory/latency management.  
 
 
 
@@ -27,6 +27,7 @@ This project is a modular IoT system designed for signal processing and communic
 ### Prerequisites
 **ESP32** development board
 **USB cable** for connecting the ESP32 to your computer
+(optional a) INA219 current sensor and b) an External power supply (5V)) 
 **ESP-IDF** (Espressif IoT Development Framework) installed on your system
 **Python** 3.6 or later
 
@@ -92,7 +93,13 @@ You can also run simultaneously:
 idf.py flash monitor
 ```
 
-g) You will be prompt from the serial to input some info, for example the wifi credentials.
+### Other configurations
+
+i) Install Mosquitto MQTT Broker;
+ii) Generate certificates in the /edge-server/mqtt_broker/certs folder.
+Reminder: the certificates will be generated with your IP address (that you can get by running *ipconfig* on Windows), so you will need to change the san.cnf file with the new one.
+iii) Install the [kissfft](https://github.com/mborgerding/kissfft)library.
+(optional) Install the [ESP-IDF-LIB](https://github.com/UncleRus/esp-idf-lib).
 
 
 

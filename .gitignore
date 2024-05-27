@@ -1,6 +1,4 @@
 build/
-#components/
-edge-server/
 sdkconfig
 sdkconfig.old
 managed_components/
