@@ -18,7 +18,7 @@ This project is a modular IoT system designed for signal processing and communic
 **Generating signal**: Continuos creation of a signal, by randomly picking one of three different signals.
 **Sampling and analyzing**: Sampling and Fast Fourier Transform (FFT) analysis of the signal.  
 **Network**: Wi-Fi connectivity and MQTT client initialization for data transmission.    
-**Transmitting**: Data transmisssion to a MQTT borker through safe protocols.
+**Transmitting**: Data transmisssion to a MQTT borker through safe protocols.  
 **Monitoritng**: //NOT yet fully functional.// Efficient power/memory/latency management.  
 
 
@@ -133,10 +133,11 @@ This project utilizes an ESP32 microcontroller to generate, sample, analyze and 
 
 ### Input Signal Generation
 The ESP32 firmware simulates the input signal, assumed to be a sum of sine waves. Two approaches for signal generation are implemented:
-            #### Continuous Generation: 
-            The '*generate_signal_task*' continuously generates signals, sending them to the queue for further processing.
-            #### Dynamic Generation: 
-            Generates and samples the signal dynamically over a specific time window, simulating real-time signal acquisition.
+#### Continuous Generation: 
+The '*generate_signal_task*' continuously generates signals, sending them to the queue for further processing.
+
+#### Dynamic Generation: 
+Generates and samples the signal dynamically over a specific time window, simulating real-time signal acquisition.
 
 ### Maximum and Optimal Sampling Frequency
 Both these values depend on which of the three signals was randomly picked during the generating process.
