@@ -1,19 +1,12 @@
-// #ifndef TRANSMITTING_H
-// #define TRANSMITTING_H
+#ifndef TRANSMITTING_H
+#define TRANSMITTING_H
 
-// #include "mqtt_client.h"  // other files need direct access to MQTT types
-// #include "network.h"
+#include "mqtt_client.h"
+#include "network.h"
 
-// // Initializes the MQTT connection and prepares for data transmission
-// void transmitting_init(void);
+extern esp_mqtt_client_handle_t client;
 
-// // Publishes signal data with time and value parameters
-// void publish_signal_data(float time, float signal_value);
+void transmit_data(const char* topic, const float* data, int data_len);
+void mqtt_publish(const char* topic, const char* message);
 
-// // Publishes FFT data using index and magnitude
-// void publish_fft_data(int index, float fft_magnitude);
-
-// // Publishes the average value of the signal
-// void publish_average(float average);
-
-// #endif // TRANSMITTING_H
+#endif // TRANSMITTING_H

@@ -1,34 +1,37 @@
 #include "sampling_and_analyzing.h"
 #include "generating_signal.h"
+#include "transmitting.h"
 #include "esp_log.h"
 #include "math.h"
 #include "kiss_fft.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+//#include <unistd.h>
 #include <stdbool.h>
 #include "esp_task_wdt.h"
+
 
 
 static const char* TAG = "DynamicSampler";
 static bool condition_met = false; 
 
-#define THRESHOLD_MULTIPLIER 1.2  // multiplier to adjust the threshold dynamically
+#define THRESHOLD_MULTIPLIER 1.1  // multiplier to adjust the threshold dynamically (lower=more sensitive to smaller inputs)
 #define FFT_SIZE 64  // buffer size (should be a power of 2 and depends on your sampling rate 32, 64, 128, 256, 512, 1024, etc.
 // Increasing improves frequency resolution but requires more computational power and memory.
 #define MAX_ITERATIONS 100  // define a maximum number of iterations for the loop
-#define WATCHDOG_FEED_INTERVAL 10  // interval to feed the watchdog in iterations
-#define PAUSE_DURATION_MS 1000  // in milliseconds
+#define WATCHDOG_FEED_INTERVAL 10 // interval to feed the watchdog in iterations
+//#define PAUSE_DURATION_MS 1000  // in milliseconds
 
 int current_sampling_rate = 600;  // starting with an initial "high" rate
 int min_sampling_rate = 40;  // recommended minimum sampling rate
-int max_sampling_rate = 30000;  // max allowable sampling rate (36k so far)
+int max_sampling_rate = 6000000;  // max allowable sampling rate
 int step_change = 20;  // step change for sampling rate
 float previous_max_magnitude = 0; 
 int initial_sampling_rate;  // to store it
 
 float max_observed_frequency_magnitude = 0;
- const int larger_step_change = 150; 
+const int larger_step_change = 150; 
 
 
 // Shared variable to store the optimal sampling rate
@@ -36,26 +39,41 @@ int optimal_sampling_rate = 600;
 
 int oversample() {
     int crashed_rate = 0;
+    const int oversample_jump = 500000;
     float max_observed_magnitude = 0;
-
     int iterations_counter = 0;  // counter to track iterations for watchdog reset
-
 
     while (true) {  // Infinite loop, no predefined crash condition
         // ESP_LOGI(TAG, "Current Sampling Rate: %d Hz", current_sampling_rate);
 
         // Sample and analyze the signal at the current rate
         float dt = 1.0 / current_sampling_rate;  // interval based on the current sampling rate
-        float signal[FFT_SIZE];  // buffer to store the signal samples
-        float frequency_magnitude1[FFT_SIZE / 2 + 1];  // buffer to store frequency magnitudes from FFT
+        // float signal[FFT_SIZE];  // buffer to store the signal samples
+        // float frequency_magnitude1[FFT_SIZE / 2 + 1];  // buffer to store frequency magnitudes from FFT
+        float* signal = (float*)malloc(FFT_SIZE * sizeof(float));
+        if (signal == NULL) {
+            ESP_LOGE(TAG, "Failed to allocate memory for signal");
+            return -1;
+        }
+
+        float* frequency_magnitude1 = (float*)malloc((FFT_SIZE / 2 + 1) * sizeof(float));
+        if (frequency_magnitude1 == NULL) {
+            free(signal);
+            ESP_LOGE(TAG, "Failed to allocate memory for frequency_magnitude1");
+            return -1;
+        }
 
         // Simulate sampling the signal (replace get_signal_at(t) with the actual function to retrieve signal data)
         for (int i = 0; i < FFT_SIZE; i++) {
             float t = i * dt;
-            signal[i] = get_signal_at(t); }
+            signal[i] = get_signal_at(t); 
+            if (i % (FFT_SIZE / 10) == 0) { // more frequent resets based on loop iteration
+                esp_task_wdt_reset();
+            }}
 
         // Perform FFT analysis on the sampled signal
         analyze_fft(signal, frequency_magnitude1);
+        esp_task_wdt_reset();
 
         // Find the maximum magnitude in the frequency spectrum.
         float max_frequency_magnitude_current_rate = 0;
@@ -73,16 +91,26 @@ int oversample() {
         // Log the maximum frequency magnitude for diagnostics
         // ESP_LOGI(TAG, "Current Sampling Rate: %d Hz, Current Max Frequency Magnitude: %.2f, Max Observed Frequency Magnitude: %.2f",
         //  current_sampling_rate, max_frequency_magnitude_current_rate, max_observed_magnitude);
-
+        free(signal);
+        free(frequency_magnitude1);
+        
         // Break the loop if the sampling rate reaches or exceeds 30,000 Hz
         if (current_sampling_rate >= max_sampling_rate) {
             ESP_LOGI(TAG, "Reached maximum sampling rate of %d Hz. Exiting loop.", max_sampling_rate);
+            char status_message[256];
+            snprintf(status_message, sizeof(status_message), "Reached maximum sampling rate of %d Hz, exiting loop.", max_sampling_rate);
+            // Publish the message to the MQTT topic
+            mqtt_publish("/status", status_message);
+
+            esp_task_wdt_reset();
+            // free(signal);
+            // free(frequency_magnitude1);
             break;
         }
 
         // Increase the sampling rate and handle any possible integer overflow
-        if (current_sampling_rate + larger_step_change > current_sampling_rate) {
-            current_sampling_rate += larger_step_change;
+        if (current_sampling_rate + oversample_jump > current_sampling_rate) {
+            current_sampling_rate += oversample_jump;
             crashed_rate = current_sampling_rate;
         } else {
             // If overflow occurs, log and reset sampling rate
@@ -92,8 +120,9 @@ int oversample() {
 
         // Periodically reset the watchdog timer
         iterations_counter++;
-        if (iterations_counter >= WATCHDOG_FEED_INTERVAL) {
+        if (iterations_counter % WATCHDOG_FEED_INTERVAL == 0) {
             esp_task_wdt_reset();
+            ESP_LOGI(TAG, "Oversampling...");
             iterations_counter = 0;  // resetr
         }
    }
@@ -101,6 +130,7 @@ int oversample() {
     // After exiting the loop, optionally reset sampling rate to a safe value or handle the failure
     current_sampling_rate = 600;  // erset 
     max_observed_frequency_magnitude = 0;  // reset
+    esp_task_wdt_reset();
     return crashed_rate;
 }
 
@@ -150,7 +180,10 @@ int sample_and_analyze_signal() {
 
     int no_improvement_counter = 0;
     float improvement_ratio = 1.05; // ratio to determine significant improvement (e.g., 5% improvement)
+    // sensitivity of the optimization process
     float last_max_magnitude = 0;
+    char message[256];  // buffer for MQTT messages
+
 
     while (!condition_met && iterations < MAX_ITERATIONS) {  // continue looping until the condition is met
         float dt = 1.0 / current_sampling_rate;
@@ -163,20 +196,17 @@ int sample_and_analyze_signal() {
         for (int i = 0; i < FFT_SIZE; i++) {
             float t = i * dt;
             signal[i] = get_signal_at(t);
+            if (i % (FFT_SIZE / 10) == 0) { // more frequent resets based on loop iteration
+                esp_task_wdt_reset();
+            }
             // if (i < 10) {  // Log the first 10 samples for inspection
             //     ESP_LOGI(TAG, "Signal at t=%f: %f", t, signal[i]);
-            // }
-            // Feed the watchdog periodically
-            // if (i % WATCHDOG_FEED_INTERVAL == 0) {
-            //     esp_task_wdt_reset();
             // }
         }
 
         // Perform FFT analysis on the sampled signal.
         analyze_fft(signal, frequency_magnitude);
-
-        // Feed the watchdog after FFT analysis
-       // esp_task_wdt_reset();
+        esp_task_wdt_reset();
 
         // Find the maximum magnitude in the frequency spectrum.
         float max_frequency_magnitude = 0;
@@ -209,10 +239,6 @@ int sample_and_analyze_signal() {
             no_improvement_counter++;
         }
 
-        
-            // ESP_LOGI(TAG, "BEFORE Previuos max magnitude: %.2f", previous_max_magnitude);
-            // ESP_LOGI(TAG, "BEFORE Max frequency magnitude: %.2f", max_frequency_magnitude);
-            // ESP_LOGI(TAG, "BEFORE Max observed frequency magnitude: %.2f", max_observed_frequency_magnitude);
             if (increasing) {
                 if (max_frequency_magnitude > previous_max_magnitude && current_sampling_rate < max_sampling_rate) {
                     current_sampling_rate += step_change; // use normal step
@@ -248,28 +274,30 @@ int sample_and_analyze_signal() {
                 }
             }
     previous_max_magnitude = max_frequency_magnitude; // update magnitude reference
-    // ESP_LOGI(TAG, "AFTER Previuos max magnitude: %.2f", previous_max_magnitude);
-    // ESP_LOGI(TAG, "AFTER Max frequency magnitude: %.2f", max_frequency_magnitude);
-    // ESP_LOGI(TAG, "AFTER Max observed frequency magnitude: %.2f", max_observed_frequency_magnitude);
-
 
             //ESP_LOGI(TAG, "Sampling after adjusting: %d Hz", current_sampling_rate);
-
-           // previous_max_magnitude = max_frequency_magnitude; // Update previous max magnitude
-            // dynamic_threshold = max_observed_frequency_magnitude * THRESHOLD_MULTIPLIER; // Update the dynamic threshold
-            iterations++; 
+            iterations++;
+            esp_task_wdt_reset(); 
             //  ESP_LOGI(TAG, "Number of iterations: %d", iterations);
-            //  ESP_LOGI(TAG, "Improvements counter: %d", no_improvement_counter);
-
             ESP_LOGI(TAG, "Reanalyzing with new parameters...");
     }
 
     // Log optimization reached after exiting the loop
     ESP_LOGI(TAG, "Optimization reached with max magnitude: %.2f", max_observed_frequency_magnitude);
+    // Transmit the final optimal rate and analysis results
+    snprintf(message, sizeof(message), "Optimization reached with max magnitude: %.2f", max_observed_frequency_magnitude);
+    mqtt_publish("/optimization_result", message);
      
     // Output the final results
     ESP_LOGI(TAG, "The optimal sampling rate is: %d Hz", optimal_sampling_rate);
+    // Transmit the final optimal rate and analysis results
+    snprintf(message, sizeof(message), "The optimal sampling rate is: %d Hz", optimal_sampling_rate);
+    mqtt_publish("/optimal_rate result", message);
     ESP_LOGI(TAG, "The maximum sampling frequency observed was: %d Hz",  max_sampling_rate_observed);
+    // Transmit the final optimal rate and analysis results
+    snprintf(message, sizeof(message), "The maximum sampling frequency observed was: %d Hz",  max_sampling_rate_observed);
+    mqtt_publish("/max_sampling_rate_observed_result", message);
+
 
     // Reset the condition flag and relevant variables for the next analysis cycle
     condition_met = false;
@@ -277,15 +305,19 @@ int sample_and_analyze_signal() {
     max_sampling_rate_observed = 600;
     max_observed_frequency_magnitude = 0;
     previous_max_magnitude = 0;
+    esp_task_wdt_reset();
 
     return optimal_sampling_rate;    
 }
 
+//Not realistic: rolling maybe, but with real signals you would observe
 float calculate_average_signal(float start_time, float window_length, int optimal_rate) {
     float dt = 1.0 / optimal_rate;
     int num_samples = window_length / dt;
     float sum = 0.0;
-     float abs_sum = 0.0; // to store the absolut sum
+    float abs_sum = 0.0; // to store the absolut sum
+    char message[256];  // Buffer for MQTT messages
+
     
     // ESP_LOGI(TAG, "Dt is %.5f", dt); 
     // ESP_LOGI(TAG, "Num samples is %d", num_samples);
@@ -304,6 +336,10 @@ float calculate_average_signal(float start_time, float window_length, int optima
     ESP_LOGI(TAG, "Average signal from t=%.3f to t=%.3f is %.3f", start_time, start_time + window_length, average);
     float average_abs = abs_sum / num_samples;
     ESP_LOGI(TAG, "Average absolute signal from t=%.3f to t=%.3f is %.3f", start_time, start_time + window_length, average_abs);
+
+    // Transmit the final optimal rate and analysis results
+    snprintf(message, sizeof(message), "Average absolute signal from t=%.3f to t=%.3f is %.3f", start_time, start_time + window_length, average_abs);
+    mqtt_publish("/avarage_analysis_result", message);
     optimal_sampling_rate = 600; // reset for the next cycle
     return average_abs;
     

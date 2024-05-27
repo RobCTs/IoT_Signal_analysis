@@ -14,5 +14,12 @@
     ],
     "idf.pythonBinPathWin": "c:\\Users\\robyy\\IoT\\esp-idf\\tools\\python_env\\idf5.4_py3.11_env\\Scripts\\python.exe",
     "idf.toolsPathWin": "c:\\Users\\robyy\\IoT\\esp-idf\\tools",
-    "C_Cpp.errorSquiggles": "disabled"
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.associations": {
+        "cstdint": "c",
+        "sampling_and_analyzing.h": "c",
+        "task_handling.h": "c",
+        "esp_err.h": "c",
+        "i2c.h": "c"
+    }
 }

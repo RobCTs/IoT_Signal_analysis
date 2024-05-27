@@ -5,6 +5,7 @@
 cmake_minimum_required(VERSION 3.5)
 
 list(APPEND EXTRA_COMPONENT_DIRS ${CMAKE_SOURCE_DIR}/components/components/kissfft)
+list(APPEND EXTRA_COMPONENT_DIRS ${CMAKE_SOURCE_DIR}/components/components/esp-idf-lib/components)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(Analyzing_signal)

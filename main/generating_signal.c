@@ -1,12 +1,26 @@
+#include "generating_signal.h"
+#include <stdint.h> 
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdarg.h>
+#include <signal.h>
 #include <time.h>
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+#include "esp_timer.h"
+#include "esp_system.h"
+
 
 #define PI 3.14159265358979323846
 #define SAMPLING_RATE 40 // sampling rate in Hz; The number of samples taken per second from a continuous signal to make a discrete signal..
 #define SIGNAL_LENGTH 9  // length of signal in seconds
+
+// Queue handle
+QueueHandle_t signalQueue = NULL;
+#define QUEUE_SIZE 1000  // This needs to be at least as large as SAMPLING_RATE * SIGNAL_LENGTH
 
 // Define tags for ESP logging
 static const char* TAG = "SignalGenerator";
@@ -33,6 +47,14 @@ float signal3(float t) {
 // Array of function pointers
 float (*signalFunctions[3])(float) = {signal1, signal2, signal3};
 
+
+void setup_signal_queue() {
+    signalQueue = xQueueCreate(QUEUE_SIZE, sizeof(float));
+    if (signalQueue == NULL) {
+        ESP_LOGE(TAG, "Failed to create queue");
+    }
+}
+
 void generate_random_signal() {
     chosenSignal = rand() % 3;  // randomly choose between 0, 1, and 2
 
@@ -42,10 +64,13 @@ void generate_random_signal() {
         //"dt" represents the time interval between consecutive samples.
         float t = i * dt;
         float signal = signalFunctions[chosenSignal](t);
+        if (xQueueSend(signalQueue, &signal, 0) != pdPASS) {
+            ESP_LOGE(TAG, "Failed to send data to the queue");
+        }
         if (i == 0 || i == (SAMPLING_RATE * SIGNAL_LENGTH) - 1) {  // limit logging to reduce delay
             ESP_LOGI(TAG, "t = %.3f, signal = %.3f", t, signal);}
+        }
     }
-}
 
 //"t" represents the specific time at which the signal value is being computed
 float get_signal_at(float t) {
