@@ -15,11 +15,11 @@ This project is a modular IoT system designed for signal processing and communic
 
 
 ## Features
-**Generating signal**: Creation of three different signals to randomly pick.  
-**Sampling and analyzing**: Fast Fourier Transform (FFT) analysis of a signal.  
-**Network**: //NOT yet fully functional.// Wi-Fi connectivity and MQTT protocol for data transmission.  
-**Security**: //NOT yet implemented.// Encryption for data storage and retrival.  
-**Transmitting**: //NOT yet implemented.// Efficient power usage management.  
+**Generating signal**: Continuos creation of a signal, by randomly picking one of three different signals.
+**Sampling and analyzing**: Sampling and Fast Fourier Transform (FFT) analysis of the signal.  
+**Network**: Wi-Fi connectivity and MQTT client initialization for data transmission.    
+**Transmitting**: Data transmisssion to a MQTT borker through safe protocols.
+**Monitoritng**: //NOT yet fully functional.// Efficient power/memory/latency management.  
 
 
 
@@ -112,8 +112,6 @@ The project is organized into several modules, each handling a specific function
 │   ├── network.h
 │   ├── sampling_and_analyzing.c
 │   ├── sampling_and_analyzing.h
-│   ├── security.c
-│   ├── security.h
 │   ├── transmitting.c
 │   └── transmitting.h
 ├── managed_components/
@@ -129,36 +127,43 @@ The project is organized into several modules, each handling a specific function
 ## Technical Details and System Design
 
 ### System Overview
-This project utilizes an ESP32 microcontroller to generate, sample, analyze, and transmit signal data. The ESP32's capabilities allow for high-resolution data handling and communication, making it ideal for real-time signal processing and IoT applications.
+This project utilizes an ESP32 microcontroller to generate, sample, analyze and transmit signal data. The ESP32's capabilities allow for high-resolution data handling and communication, making it ideal for real-time signal processing and IoT applications. For the project it was also connected INA219 for the analysis of the power consumption.
+
+### Setup and Initialization
+
+### Input Signal Generation
+The ESP32 firmware simulates the input signal, assumed to be a sum of sine waves. Two approaches for signal generation are implemented:
+            #### Continuous Generation: 
+            The '*generate_signal_task*' continuously generates signals, sending them to the queue for further processing.
+            #### Dynamic Generation: 
+            Generates and samples the signal dynamically over a specific time window, simulating real-time signal acquisition.
 
 ### Maximum and Optimal Sampling Frequency
+Both these values depend on which of the three signals was randomly picked during the generating process.
+
 #### MSF
-Depending if we are working in real-time conditions or not. Without a delay, so essentially using the speed of the processor, and chosing a buffer size of 128, we can go up to 10MHz (and it stopped because of time management). With higher buffers there is an overflow error. Note that the actual sampling rate used is dynamically adjusted based on the signal content to optimize processing power and storage.The maximum sampling frequency on the ESP32 while introducing a delay appears to be at least 6 MHz (again might be more, stopped due to time costraints). This high sampling rate demonstrates the capability of the system to handle fast signal acquisition.
+The maximum sampling frequency depends on the ESP32's processing capabilities or the limits of the ADC used. Without intentional delays, the system can achieve very high sampling rates, demonstrating the processor's speed. Introducing maximum observed sampling rate was at least 8 MHz, limited by practical constraints like time and resource management. The system dynamically adjusts the sampling rate based on the signal's content to optimize performance.
 
 #### OSF
-The optimal sampling rate is dynamically calculated based on the Fast Fourier Transform (FFT) analysis of the signal. The system adjusts the sampling rate to ensure it meets the Nyquist criterion, which states that the sampling frequency must be at least twice the highest frequency present in the signal to avoid aliasing.
-The sampling rate starts at a higher rate and is adjusted downwards or upwards based on the FFT results and a predefined threshold to find the optimal rate that captures all relevant frequencies without unnecessary oversampling.
+The optimal sampling rate is dynamically calculated based on the Fast Fourier Transform (FFT) analysis of the signal, ensuring the sampling rate meets the Nyquist criterion (at least twice the highest frequency in the signal). Starting with a high sampling rate, the system adjusts it downwards or upwards based on the FFT results and a predefined threshold to find the optimal rate that captures all relevant frequencies without unnecessary oversampling. So, balancing accuracy and resource efficiency.
 
 ### Signal Processing
-The system employs kissFFT, a lightweight **FFT** library, to transform time-domain signals into their frequency components. This transformation helps in identifying the dominant frequencies within the signal which guides the sampling rate adjustment.
+The system uses kissFFT library, a lightweight **FFT** library, to transform time-domain signals into their frequency components. This transformation helps in identifying the dominant frequencies within the signal which guides the sampling rate adjustment.
 A threshold multiplier is applied to dynamically adjust the decision threshold for sampling rate changes, based on the observed signal characteristics.
 
 ### Aggregate Function Over a Window
-Computing the average of the signal over a specified window (default of 5 seconds) serves to smooth out transient noise and provide a stable measure of the signal's characteristics over that period.The average is calculated both as a simple mean and as a mean of absolute values, the latter providing insights into the overall energy of the signal irrespective of its direction.
+Computing the average of the signal over a specified window (default of 5 seconds) serves to smooth out transient noise and provide a stable measure of the signal's characteristics over that period. The average is calculated both as a simple mean and as a mean of absolute values, the latter providing insights into the overall energy of the signal irrespective of its direction.
 This aggregate value provides a meaningful representation of the signal over time and reduces the volume of data to be transmitted.
 
 ### Communication with Edge Server
 MQTT is used for data transmission to leverage its lightweight and efficient publish/subscribe model, which is suitable for IoT devices with limited bandwidth and power. Moreover, only aggregate data metrics are transmitted, reducing the amount of data sent. Data integrity and confidentiality are ensured through SSL encryption, safeguarding data during transmission to the edge server.
+
+It must be noted that every change in the network configuration (for example a change of IP address) will need new TLS certificates that will have to be generated locally.
  
 ### Error Handling
 ESP32's task watchdog timers are utilized to ensure system responsiveness and recovery from potential deadlocks or excessive processing delays. Through out the code the ESP_LOG features are extensively used for debugging and tracking the system's operational status, helping in quick identification and resolution of issues during development and deployment.
 
-### Future Enhancments and Security Measures
-The MQTT Communication needs to be optimize and properly set. The project also plans to integrate Advanced Encryption Standard (AES) for secure data encryption using Cipher Block Chaining (CBC) mode. I am actively developing functionalities to measure power consumption, memory utilization, and system latency. These tools will be integrated directly into the system to allow real-time monitoring and optimization. The implementation of these features is in progress
-
-
-### System Performance
-(As previously stated, not yet implemented no numbers yet to analyze.)
+### SYSTEM PERFORMANCE MONITORING
 **Energy Savings**: The adaptive sampling frequency should results in significant energy savings compared to the original oversampled frequency.
 **Data Volume**: The volume of data transmitted over the network is reduced by using the avarage, as only the aggregate values are sent instead of raw high-frequency data.
 **End-to-End Latency**: The latency of the system, from data generation to reception by the edge server, if properly handled should ensure timely data delivery.
