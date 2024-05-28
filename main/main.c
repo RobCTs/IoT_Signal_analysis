@@ -16,17 +16,16 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include "driver/i2c.h"
-#include "ina219.h"
+#include <ina219.h>
 
 static const char* TAG = "TaskHandler";
 
 #define I2C_PORT 0
-#define CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM 100
-#define CONFIG_EXAMPLE_I2C_ADDR 0x40
-#define CONFIG_EXAMPLE_I2C_MASTER_SCL 2
-#define CONFIG_EXAMPLE_I2C_MASTER_SDA 1
-#define I2C_ADDR CONFIG_EXAMPLE_I2C_ADDR
+#define SHUNT_RESISTOR_MILLI_OHM 100
+#define EXAMPLE_I2C_ADDR 0x40
+#define I2C_MASTER_SCL 2
+#define I2C_MASTER_SDA 1
+#define I2C_ADDR EXAMPLE_I2C_ADDR
 ina219_t dev;
 float power;
 
@@ -51,53 +50,43 @@ const int TASK_5_READY_BIT = BIT4;
 
 
 void generate_signal_task(void *pvParameters) {
-    ESP_LOGI(TAG, "Task 1 initialized.");
-    xEventGroupSync(syncEventGroup, TASK_1_READY_BIT, TASK_1_READY_BIT | TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
+    ESP_LOGI(TAG, "Generate signal initialized.");
     esp_task_wdt_add(NULL);  // add this task to the watchdog timer
     int64_t start_time, end_time;
 
     while (true) {
-        ESP_LOGI(TAG, "Task 1 generating signal...");
+        ESP_LOGI(TAG, "(Task 1) Generating signal...");
         start_time = esp_timer_get_time();
         generate_random_signal();
         end_time = esp_timer_get_time(); 
-        ESP_LOGI(TAG, "Task 1 signal generated, time taken: %lld us. Signaling task 2.", end_time - start_time);
+        ESP_LOGI(TAG, "Signal generated, time taken: %lld us.", end_time - start_time);
         snprintf(message, sizeof(message), "Generating signal task took: %lld us", end_time - start_time);
         mqtt_publish("/task_time", message);
 
-        // xTaskNotifyGive(xanalysisCompleteTask);
-        // //ESP_LOGI(TAG, "Task 1 waiting for other tasks to complete...");
-        // ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         esp_task_wdt_reset();
         vTaskDelay(5000);
     }
-    // esp_task_wdt_delete(NULL); 
-    // vTaskDelete(NULL);
 }
 
 void sample_and_analyze_task(void *pvParameters) {
-    ESP_LOGI(TAG, "Task 2 initialized.");
-    float signal; // declare the variable to hold the signal value from the queue
+    ESP_LOGI(TAG, "Sampling and analysis initialized.");
+    float signal; // to hold the signal value from the queue
     int64_t start_time, end_time;
     UBaseType_t uxHighWaterMark;
     
-    xEventGroupSync(syncEventGroup, TASK_2_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
+    xEventGroupSync(syncEventGroup, TASK_2_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT, portMAX_DELAY);
     esp_task_wdt_add(NULL); 
 
     while (true) {
-        //ESP_LOGI(TAG, "Task 2 waiting for signal from Task 1...");
-        //ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
         if (xQueueReceive(signalQueue, &signal, portMAX_DELAY) == pdTRUE) {
             ESP_LOGI("DataProcess", "Received signal: %.2f", signal);
             
-            ESP_LOGI(TAG, "Task 2 analyzing signal...");
+            ESP_LOGI(TAG, "Analyzing signal...");
             start_time = esp_timer_get_time();
             sample_and_analyze_signal(); // update optimal_sampling_rate
             end_time = esp_timer_get_time();
-            ESP_LOGI(TAG, "Task 2 analysis complete, time taken: %lld us. Notifying Task 3.", end_time - start_time);
-            //uxTaskGetStackHighWaterMark to check stack usage?
-            snprintf(message, sizeof(message), "Sampòoing and analyzing task took: %lld us", end_time - start_time);
+            ESP_LOGI(TAG, "Analysis complete, time taken: %lld us. Notifying Task 3.", end_time - start_time);
+            snprintf(message, sizeof(message), "Sampling and analyzing task took: %lld us", end_time - start_time);
             mqtt_publish("/task_time", message);
 
         xTaskNotifyGive(xaverageComputeTask);
@@ -106,74 +95,70 @@ void sample_and_analyze_task(void *pvParameters) {
         // Check the remaining stack space
         uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
         ESP_LOGI(TAG, "Minimum stack space left in sample_and_analyze_task: %u", uxHighWaterMark);
+        }
     }
-    }
-    esp_task_wdt_delete(NULL);
-    vTaskDelete(NULL);
+    // esp_task_wdt_delete(NULL);
+    // vTaskDelete(NULL);
 }
 
 void compute_average_task(void *pvParameters) {
-    ESP_LOGI(TAG, "Task 3 initialized.");
+    ESP_LOGI(TAG, "Computing average initialized.");
     int64_t start_time, end_time;
 
-    xEventGroupSync(syncEventGroup, TASK_3_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
+    xEventGroupSync(syncEventGroup, TASK_3_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT, portMAX_DELAY);
     esp_task_wdt_add(NULL); 
 
     while (true) {
         //ESP_LOGI(TAG, "Task 3 waiting for signal from Task 2...");
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        ESP_LOGI(TAG, "Task 3 computing average...");
+        ESP_LOGI(TAG, "Computing average...");
         start_time = esp_timer_get_time();
         float average = sample_signal_and_compute_average(5); //change the window length if needed
         end_time = esp_timer_get_time();
-        ESP_LOGI(TAG, "Task 3 average signal value: %.2f, time taken: %lld us", average, end_time - start_time);
+        ESP_LOGI(TAG, "(Task 3) The average signal value: %.2f, time taken: %lld us", average, end_time - start_time);
         snprintf(message, sizeof(message), "Averaging task took: %lld us", end_time - start_time);
         mqtt_publish("/task_time", message);
 
-        //ESP_LOGI(TAG, "Task 3 notifying Task 1 to start next cycle.");
-        xTaskNotifyGive(xoversampleTask);
+        // //ESP_LOGI(TAG, "Task 3 notifying Task 1 to start next cycle.");
+        // xTaskNotifyGive(xoversampleTask);
     }
     esp_task_wdt_delete(NULL);
     vTaskDelete(NULL);
 }
 
 void oversample_task(void *pvParameters) {
-    ESP_LOGI(TAG, "Task 4 initialized.");
+    ESP_LOGI(TAG, "Oversampling initialized.");
     int64_t start_time, end_time;
+    float signal2; 
 
-    xEventGroupSync(syncEventGroup, TASK_4_READY_BIT, TASK_2_READY_BIT | TASK_3_READY_BIT | TASK_4_READY_BIT, portMAX_DELAY);
     esp_task_wdt_add(NULL);  // add this task to the watchdog timer
     UBaseType_t uxHighWaterMark;
 
     while (true) {
-        //ESP_LOGI(TAG, "Task 4 waiting for signal from Task 3...");
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-
-        ESP_LOGI(TAG, "Task 4 starting oversampling...");
-        start_time = esp_timer_get_time();
-        int crashed_rate = oversample();
-        end_time = esp_timer_get_time();
-        ESP_LOGE(TAG, "Crash detected at %d, time taken: %lld us", crashed_rate, end_time - start_time);
-        snprintf(message, sizeof(message), "Oversampling task took: %lld us", end_time - start_time);
-        mqtt_publish("/task_time", message);
-
-        //ESP_LOGI(TAG, "Task 4 notifying Task 1 to start next cycle.");
-        xTaskNotifyGive(xmonitorSystemHealthTask);
-
-        // Check the remaining stack space
-        uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
-        ESP_LOGI(TAG, "Minimum stack space left in oversample_task: %u", uxHighWaterMark);
+        if (xQueueReceive(signalQueue, &signal2, portMAX_DELAY) == pdTRUE) {
+            ESP_LOGI("DataProcess", "Received signal: %.2f", signal2);
     
+            ESP_LOGI(TAG, "Starting oversampling...");
+            start_time = esp_timer_get_time();
+            int crashed_rate = oversample();
+            end_time = esp_timer_get_time();
+            ESP_LOGE(TAG, "Crash detected at %d, time taken: %lld us", crashed_rate, end_time - start_time);
+            snprintf(message, sizeof(message), "Oversampling task took: %lld us", end_time - start_time);
+            mqtt_publish("/task_time", message);
+
+            // Check the remaining stack space
+            uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
+            ESP_LOGI(TAG, "Minimum stack space left in oversample_task: %u", uxHighWaterMark);
+        }
+    // esp_task_wdt_delete(NULL);
+    // vTaskDelete(NULL);
     }
-    esp_task_wdt_delete(NULL);
-    vTaskDelete(NULL);
 }
 
 void monitor_system_health() {
     ESP_LOGI(TAG, "Task 6 initialized.");
-    
+    while (true) {
     unsigned int free_heap = esp_get_free_heap_size();
     unsigned int minimum_ever_free_heap = esp_get_minimum_free_heap_size();
     ESP_LOGI(TAG, "Free Heap: %u bytes", free_heap);
@@ -185,27 +170,27 @@ void monitor_system_health() {
     xTaskNotifyGive(xsignalReadyTask);
 
     vTaskDelay(pdMS_TO_TICKS(3000));  // 3s
+    }
 }
 
-
-// Function to initialize INA219 sensor
+// Initialize INA219 sensor
 void initialize_power_sensor(void) {
     ESP_ERROR_CHECK(i2cdev_init());
     memset(&dev, 0, sizeof(ina219_t));
-    assert(CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM > 0);
-    ESP_ERROR_CHECK(ina219_init_desc(&dev, I2C_ADDR, I2C_MASTER_NUM, I2C_MASTER_SDA_IO, I2C_MASTER_SCL_IO));
+    assert(SHUNT_RESISTOR_MILLI_OHM > 0);
+    ESP_ERROR_CHECK(ina219_init_desc(&dev, I2C_ADDR, I2C_PORT, I2C_MASTER_SDA, I2C_MASTER_SCL));
     ESP_LOGI(TAG, "Initializing ina219");
     ESP_ERROR_CHECK(ina219_init(&dev));
     ESP_LOGI(TAG, "Configuring ina219");
     ESP_ERROR_CHECK(ina219_configure(&dev, INA219_BUS_RANGE_16V, INA219_GAIN_0_125,
                                      INA219_RES_12BIT_1S, INA219_RES_12BIT_1S, INA219_MODE_CONT_SHUNT_BUS));
     ESP_LOGI(TAG, "Calibrating ina219");
-    ESP_ERROR_CHECK(ina219_calibrate(&dev, (float)CONFIG_EXAMPLE_SHUNT_RESISTOR_MILLI_OHM / 1000.0f));
+    ESP_ERROR_CHECK(ina219_calibrate(&dev, (float)SHUNT_RESISTOR_MILLI_OHM / 1000.0f));
 }
 
 void power_measurement_task(void *pvParameters) {
     float power;
-    ESP_LOGI(TAG, "Power measurement task started");
+    ESP_LOGI(TAG, "System power measurement task started");
     while (true) {
         esp_err_t ret = ina219_get_power(&dev, &power);
         if (ret == ESP_OK) {
@@ -222,22 +207,10 @@ void power_measurement_task(void *pvParameters) {
 
 void network_config_task(void *pvParameters) {
     ESP_LOGI(TAG, "Network Config initialized.");    
-    network_init();  // Initialize network
-    // // Wait for connection
-    // EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
-    //         WIFI_CONNECTED_BIT,
-    //         pdFALSE,
-    //         pdTRUE,
-    //         portMAX_DELAY);
-
-    // if (bits & WIFI_CONNECTED_BIT) {
-    //     ESP_LOGI(TAG, "Connected to AP");
-    // } else {
-    //     ESP_LOGI(TAG, "Failed to connect to AP");
-    // }
+    network_init();  // initialize network
 
     ESP_LOGI(TAG, "Network Configuration completed.");
-    mqtt_app_start();  // Start MQTT
+    mqtt_app_start();  // start MQTT
     ESP_LOGI(TAG, "Credentials correctly configured");
 
     // Suspend this task indefinitely
@@ -259,9 +232,10 @@ void app_main() {
     // Initialize INA219 sensor
     initialize_power_sensor();
 
-    xTaskCreate(network_config_task, "NetworkConfigTask", 4096, NULL, 9, &xNetworkConfigTask); //NULL?
+    xTaskCreate(network_config_task, "NetworkConfigTask", 4096, NULL, 9, &xNetworkConfigTask);
 
-    vTaskDelay(pdMS_TO_TICKS(15000));  
+    vTaskDelay(pdMS_TO_TICKS(10000));  // five some time for the configuration
+
     xTaskCreate(generate_signal_task, "GenerateSignalTask", 8192, NULL, 7, &xsignalReadyTask);
     xTaskCreate(sample_and_analyze_task, "SampleAndAnalyzeTask", 8192, NULL, 6, &xanalysisCompleteTask);
     xTaskCreate(compute_average_task, "ComputeAverageTask", 4096, NULL, 5, &xaverageComputeTask);
