@@ -28,6 +28,10 @@ static const char* TAG = "TaskHandler";
 #define I2C_ADDR EXAMPLE_I2C_ADDR
 ina219_t dev;
 float power;
+int64_t task1_total_time = 0;
+int64_t task2_total_time = 0;
+int64_t task3_total_time = 0;
+int64_t task4_total_time = 0;
 
 extern QueueHandle_t signalQueue;
 char message[256];  // buffer for MQTT messages
@@ -39,14 +43,12 @@ TaskHandle_t xoversampleTask = NULL;
 TaskHandle_t xmonitorSystemHealthTask = NULL;
 TaskHandle_t xNetworkConfigTask = NULL;
 TaskHandle_t xPowerMeasurementTask = NULL;  
+TaskHandle_t xTaskPower = NULL;
 
 EventGroupHandle_t syncEventGroup;
 const int TASK_1_READY_BIT = BIT0;
 const int TASK_2_READY_BIT = BIT1;
 const int TASK_3_READY_BIT = BIT2;
-const int TASK_4_READY_BIT = BIT3;
-const int TASK_5_READY_BIT = BIT4;
-
 
 
 void generate_signal_task(void *pvParameters) {
@@ -58,7 +60,8 @@ void generate_signal_task(void *pvParameters) {
         ESP_LOGI(TAG, "(Task 1) Generating signal...");
         start_time = esp_timer_get_time();
         generate_random_signal();
-        end_time = esp_timer_get_time(); 
+        end_time = esp_timer_get_time();
+        task1_total_time += (end_time - start_time); 
         ESP_LOGI(TAG, "Signal generated, time taken: %lld us.", end_time - start_time);
         snprintf(message, sizeof(message), "Generating signal task took: %lld us", end_time - start_time);
         mqtt_publish("/task_time", message);
@@ -85,6 +88,7 @@ void sample_and_analyze_task(void *pvParameters) {
             start_time = esp_timer_get_time();
             sample_and_analyze_signal(); // update optimal_sampling_rate
             end_time = esp_timer_get_time();
+            task2_total_time += (end_time - start_time);
             ESP_LOGI(TAG, "Analysis complete, time taken: %lld us. Notifying Task 3.", end_time - start_time);
             snprintf(message, sizeof(message), "Sampling and analyzing task took: %lld us", end_time - start_time);
             mqtt_publish("/task_time", message);
@@ -116,6 +120,7 @@ void compute_average_task(void *pvParameters) {
         start_time = esp_timer_get_time();
         float average = sample_signal_and_compute_average(5); //change the window length if needed
         end_time = esp_timer_get_time();
+        task3_total_time += (end_time - start_time);
         ESP_LOGI(TAG, "(Task 3) The average signal value: %.2f, time taken: %lld us", average, end_time - start_time);
         snprintf(message, sizeof(message), "Averaging task took: %lld us", end_time - start_time);
         mqtt_publish("/task_time", message);
@@ -143,6 +148,7 @@ void oversample_task(void *pvParameters) {
             start_time = esp_timer_get_time();
             int crashed_rate = oversample();
             end_time = esp_timer_get_time();
+            task4_total_time += (end_time - start_time);
             ESP_LOGE(TAG, "Crash detected at %d, time taken: %lld us", crashed_rate, end_time - start_time);
             snprintf(message, sizeof(message), "Oversampling task took: %lld us", end_time - start_time);
             mqtt_publish("/task_time", message);
@@ -188,7 +194,7 @@ void initialize_power_sensor(void) {
     ESP_ERROR_CHECK(ina219_calibrate(&dev, (float)SHUNT_RESISTOR_MILLI_OHM / 1000.0f));
 }
 
-void power_measurement_task(void *pvParameters) {
+void system_power_measurement_task(void *pvParameters) {
     float power;
     ESP_LOGI(TAG, "System power measurement task started");
     while (true) {
@@ -204,6 +210,45 @@ void power_measurement_task(void *pvParameters) {
     }
 }
 
+void log_energy_consumption() {
+    float power;
+    char message[256];
+
+    if (ina219_get_power(&dev, &power) == ESP_OK) {
+        printf("Power: %.2f mW\n", power);
+        
+        // Calculate total elapsed time
+        int64_t total_time = task1_total_time + task2_total_time + task3_total_time + task4_total_time;
+
+        // Calculate energy consumption for each task
+        float task1_energy = (task1_total_time / (float)total_time) * power * (total_time / 1000000.0);
+        float task2_energy = (task2_total_time / (float)total_time) * power * (total_time / 1000000.0);
+        float task3_energy = (task3_total_time / (float)total_time) * power * (total_time / 1000000.0);
+        float task4_energy = (task4_total_time / (float)total_time) * power * (total_time / 1000000.0);
+
+        printf("Task 1 Energy: %.2f mJ\n", task1_energy);
+        snprintf(message, sizeof(message), "(Task 1) Generating signal Energy: %.2f mJ\n", task1_energy);
+        mqtt_publish("/task_time", message);
+        printf("Task 2 Energy: %.2f mJ\n", task2_energy);
+        snprintf(message, sizeof(message), "(Task 2)Analyzing Energy: %.2f mJ\n", task2_energy);
+        mqtt_publish("/task_time", message);
+        printf("Task 3 Energy: %.2f mJ\n", task3_energy);
+        snprintf(message, sizeof(message), "(Task 3) Computing averageEnergy: %.2f mJ\n", task3_energy);
+        mqtt_publish("/task_time", message);
+        printf("Task 4 Energy: %.2f mJ\n", task4_energy);
+        snprintf(message, sizeof(message), "Oversampling Energy: %.2f mJ\n", task4_energy);
+        mqtt_publish("/task_time", message);
+    } else {
+        printf("Failed to read power\n");
+    }
+}
+
+void tasks_power_measurment_task(void *pvParameters) {
+    while (true) {
+        log_energy_consumption();
+        vTaskDelay(pdMS_TO_TICKS(1000)); // log energy consumption every second
+    }
+}
 
 void network_config_task(void *pvParameters) {
     ESP_LOGI(TAG, "Network Config initialized.");    
@@ -241,6 +286,7 @@ void app_main() {
     xTaskCreate(compute_average_task, "ComputeAverageTask", 4096, NULL, 5, &xaverageComputeTask);
     xTaskCreate(oversample_task, "OversampleTask", 8192, NULL, 4, &xoversampleTask);
 
-    xTaskCreate(monitor_system_health, "MonitorHealthTask", 4096, NULL, 5, &xmonitorSystemHealthTask);
-    xTaskCreate(power_measurement_task, "PowerMeasurementTask", 4096, NULL, 6, &xPowerMeasurementTask);
+    xTaskCreate(monitor_system_health, "MonitorHealthTask", 4096, NULL, 4, &xmonitorSystemHealthTask);
+    xTaskCreate(system_power_measurement_task, "PowerMeasurementTask", 4096, NULL, 5, &xPowerMeasurementTask);
+    xTaskCreate(tasks_power_measurment_task, "TasksPowerMeasurementTask", 4096, NULL, 6, &xTaskPower);
 }
