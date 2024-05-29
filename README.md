@@ -173,10 +173,13 @@ ESP32's task watchdog timers are utilized to ensure system responsiveness and re
 
 ### SYSTEM PERFORMANCE MONITORING
 **Energy Savings**: The adaptive sampling frequency should results in significant energy savings compared to the original oversampled frequency.
-After regularly outputing the power and computing the energy assuming that each task is consuming the same amount of power, we get that the generate_signal task used 0.03 mJ, the sample_and_analyze task (fft performing) 0.07 mJ, the computing average task 0.02 mJ and the oversampling task 0.13 mJ. It is cleared that a more optimization driven approach, instead of oversampling, saves almost half the energy.  
-**Data Volume**: The volume of data transmitted over the network is reduced by using the avarage, as only the aggregate values are sent instead of raw high-frequency data.  
-**End-to-End Latency**: The latency of the system, from data generation to reception by the edge server, if properly handled should ensure timely data delivery.  
-
+After regularly outputing the power and computing the energy assuming that each task is consuming the same amount of power, we get different result depending on the complexity of the signal received. For the simpler signal we get that the generate_signal task used 0.01 mJ, the sample_and_analyze task (fft performing) 0.07 mJ, the computing average task 0.02 mJ and the oversampling task 0.13 mJ. For complexer signals (that requires more time) we can get up to 0.75 mJ (generate_signal task), 15.99 mJ (sample_and_analyze task), 3.95 (averaging task) and 144.60 mJ (oversampling). As we might notice, a) a more optimization driven approach, instead of oversampling, is to be chosen for better performances and saving more energy and b) complexer the signal more time and energy the system needs to consume in order to run the oversampling task.  
+  
+  
+**Data Volume**: More topics were created in order to compare the data sent to the broker. Logging the time on average uses 23 or 36 bytes, the power measurmet logs 14 bytes, the results from the sample and analyze task  135 bytes (magnitude 52 bytes, optimal rate results 36 bytes, optimization process 47 bytes), the average task 56 bytes, and the oversampling rate 58 bytes.  
+  
+**End-to-End Latency**: The latency of the system, from data generation to reception by the edge server, if properly handled should ensure timely data delivery. Sadly because of a usteady connections, the latency from the system to the broker publishing was oscilating between 0.09 and 10.24 seconds.  
+  
 
 
 ## License
