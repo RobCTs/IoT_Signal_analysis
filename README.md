@@ -173,8 +173,9 @@ ESP32's task watchdog timers are utilized to ensure system responsiveness and re
 
 ### SYSTEM PERFORMANCE MONITORING
 **Energy Savings**: The adaptive sampling frequency should results in significant energy savings compared to the original oversampled frequency.
-**Data Volume**: The volume of data transmitted over the network is reduced by using the avarage, as only the aggregate values are sent instead of raw high-frequency data.
-**End-to-End Latency**: The latency of the system, from data generation to reception by the edge server, if properly handled should ensure timely data delivery.
+After regularly outputing the power and computing the energy assuming that each task is consuming the same amount of power, we get that the generate_signal task used 0.03 mJ, the sample_and_analyze task (fft performing) 0.07 mJ, the computing average task 0.02 mJ and the oversampling task 0.13 mJ. It is cleared that a more optimization driven approach, instead of oversampling, saves almost half the energy.  
+**Data Volume**: The volume of data transmitted over the network is reduced by using the avarage, as only the aggregate values are sent instead of raw high-frequency data.  
+**End-to-End Latency**: The latency of the system, from data generation to reception by the edge server, if properly handled should ensure timely data delivery.  
 
 
 
